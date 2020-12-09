@@ -23,6 +23,11 @@ ratings_file = './data/ratings.csv'
 predictions_file = './data/predictions.csv'
 submission_file = './data/submission.csv'
 
+# movies_file = r'/prediction/data/movies.csv'
+# users_file = '/prediction/data/users.csv'
+# ratings_file = '/prediction/data/ratings.csv'
+# predictions_file = '/prediction/data/predictions.csv'
+# submission_file = '/data/submission.csv'
 
 # Read the data using pandas
 movies_description = pd.read_csv(movies_file, delimiter=';', dtype={'movieID':'int', 'year':'int', 'movie':'str'}, names=['movieID', 'year', 'movie'])
@@ -38,6 +43,8 @@ predictions_description = pd.read_csv(predictions_file, delimiter=';', names=['u
 
 def predict_collaborative_filtering(movies, users, ratings, predictions):
     # TO COMPLETE
+
+
 
     pass
 
