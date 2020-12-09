@@ -17,11 +17,11 @@ To know more about the expectations, please refer to the guidelines.
 #####
 
 #Where data is located
-movies_file = './data/movies.csv'
-users_file = './data/users.csv'
-ratings_file = './data/ratings.csv'
-predictions_file = './data/predictions.csv'
-submission_file = './data/submission.csv'
+movies_file = '../data/movies.csv'
+users_file = '../data/users.csv'
+ratings_file = '../data/ratings.csv'
+predictions_file = '../data/predictions.csv'
+submission_file = '../data/submission.csv'
 
 # movies_file = r'/prediction/data/movies.csv'
 # users_file = '/prediction/data/users.csv'
@@ -54,13 +54,13 @@ def predict_collaborative_filtering(movies, users, ratings, predictions):
 ## LATENT FACTORS
 ##
 #####
-    
+
 def predict_latent_factors(movies, users, ratings, predictions):
     ## TO COMPLETE
 
     pass
-    
-    
+
+
 #####
 ##
 ## FINAL PREDICTORS
@@ -68,9 +68,9 @@ def predict_latent_factors(movies, users, ratings, predictions):
 #####
 
 def predict_final(movies, users, ratings, predictions):
-  ## TO COMPLETE
+    ## TO COMPLETE
 
-  pass
+    pass
 
 
 #####
@@ -79,7 +79,7 @@ def predict_final(movies, users, ratings, predictions):
 ## //!!\\ TO CHANGE
 ##
 #####
-    
+
 #By default, predicted rate is a random classifier
 def predict_random(movies, users, ratings, predictions):
     number_predictions = len(predictions)
@@ -92,15 +92,16 @@ def predict_random(movies, users, ratings, predictions):
 ##
 #####    
 
+
 ## //!!\\ TO CHANGE by your prediction function
 predictions = predict_random(movies_description, users_description, ratings_description, predictions_description)
 
-#Save predictions, should be in the form 'list of tuples' or 'list of lists'
+# Save predictions, should be in the form 'list of tuples' or 'list of lists'
 with open(submission_file, 'w') as submission_writer:
     #Formates data
     predictions = [map(str, row) for row in predictions]
     predictions = [','.join(row) for row in predictions]
     predictions = 'Id,Rating\n'+'\n'.join(predictions)
-    
-    #Writes it dowmn
+
+    #Writes it down
     submission_writer.write(predictions)
