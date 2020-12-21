@@ -3,6 +3,7 @@ import pandas as pd
 import os.path
 from random import randint
 
+print(np.version.version)
 # -*- coding: utf-8 -*-
 """
 ### NOTES
@@ -16,7 +17,7 @@ To know more about the expectations, please refer to the guidelines.
 ##
 #####
 
-#Where data is located
+# Where data is located
 movies_file = '../data/movies.csv'
 users_file = '../data/users.csv'
 ratings_file = '../data/ratings.csv'
@@ -30,10 +31,16 @@ submission_file = '../data/submission.csv'
 # submission_file = '/data/submission.csv'
 
 # Read the data using pandas
-movies_description = pd.read_csv(movies_file, delimiter=';', dtype={'movieID':'int', 'year':'int', 'movie':'str'}, names=['movieID', 'year', 'movie'])
-users_description = pd.read_csv(users_file, delimiter=';', dtype={'userID':'int', 'gender':'str', 'age':'int', 'profession':'int'}, names=['userID', 'gender', 'age', 'profession'])
-ratings_description = pd.read_csv(ratings_file, delimiter=';', dtype={'userID':'int', 'movieID':'int', 'rating':'int'}, names=['userID', 'movieID', 'rating'])
+movies_description = pd.read_csv(movies_file, delimiter=';', dtype={'movieID': 'int', 'year': 'int', 'movie': 'str'},
+                                 names=['movieID', 'year', 'movie'])
+users_description = pd.read_csv(users_file, delimiter=';',
+                                dtype={'userID': 'int', 'gender': 'str', 'age': 'int', 'profession': 'int'},
+                                names=['userID', 'gender', 'age', 'profession'])
+ratings_description = pd.read_csv(ratings_file, delimiter=';',
+                                  dtype={'userID': 'int', 'movieID': 'int', 'rating': 'int'},
+                                  names=['userID', 'movieID', 'rating'])
 predictions_description = pd.read_csv(predictions_file, delimiter=';', names=['userID', 'movieID'], header=None)
+
 
 #####
 ##
@@ -42,8 +49,13 @@ predictions_description = pd.read_csv(predictions_file, delimiter=';', names=['u
 #####
 
 def predict_collaborative_filtering(movies, users, ratings, predictions):
-    # TO COMPLETE
-
+    """
+    Trying nearest-neighbor algorithm with Item-Item approach
+    """
+    # Creating utility matrix 'u' : User x Movie -> Rating
+    utility_matrix = ratings \
+        .pivot(index='movieID', columns='userID', values='rating') \
+        .fillna(0)
 
 
     pass
@@ -73,6 +85,9 @@ def predict_final(movies, users, ratings, predictions):
     pass
 
 
+predict_collaborative_filtering(movies_description, users_description, ratings_description, predictions_description)
+
+
 #####
 ##
 ## RANDOM PREDICTORS
@@ -80,11 +95,12 @@ def predict_final(movies, users, ratings, predictions):
 ##
 #####
 
-#By default, predicted rate is a random classifier
+# By default, predicted rate is a random classifier
 def predict_random(movies, users, ratings, predictions):
     number_predictions = len(predictions)
 
     return [[idx, randint(1, 5)] for idx in range(1, number_predictions + 1)]
+
 
 #####
 ##
@@ -93,15 +109,32 @@ def predict_random(movies, users, ratings, predictions):
 #####    
 
 
-## //!!\\ TO CHANGE by your prediction function
-predictions = predict_random(movies_description, users_description, ratings_description, predictions_description)
+# ## //!!\\ TO CHANGE by your prediction function
 
-# Save predictions, should be in the form 'list of tuples' or 'list of lists'
-with open(submission_file, 'w') as submission_writer:
-    #Formates data
-    predictions = [map(str, row) for row in predictions]
-    predictions = [','.join(row) for row in predictions]
-    predictions = 'Id,Rating\n'+'\n'.join(predictions)
+'''
+Carefully read this : You can uncomment this but I am doing my own submission output since I cannot
+do "with open(submission_file)
+- written by Bill
+'''
+# submission_read = pd.read_csv(submission_file)
+# submission_read.columns = ['id', 'rating']
+#
+# predictions = predict_random(movies_description, users_description, ratings_description, predictions_description)
+# predictions_df = pd.DataFrame(predictions, columns = ['Id', 'Rating'])
+#
+# submission_result = submission_read.merge(predictions_df, how='left', left_on='id', right_on='Id')
+# submission_result.drop('id', axis=1, inplace=True)
+# submission_result.drop('rating', axis=1, inplace=True)
+#
+# submission_result.to_csv('submission.csv',  index=False)
 
-    #Writes it down
-    submission_writer.write(predictions)
+#
+# # Save predictions, should be in the form 'list of tuples' or 'list of lists'
+# with open(submission_file, 'w') as submission_writer:
+#     #Formates data
+#     predictions = [map(str, row) for row in predictions]
+#     predictions = [','.join(row) for row in predictions]
+#     predictions = 'Id,Rating\n'+'\n'.join(predictions)
+#
+#     #Writes it down
+#     submission_writer.write(predictions)

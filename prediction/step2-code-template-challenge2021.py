@@ -25,12 +25,11 @@ To know more about the expectations, please refer to the guidelines.
 #####
 
 #Where data is located
-movies_file = './data/movies.csv'
-users_file = './data/users.csv'
-ratings_file = './data/ratings.csv'
-predictions_file = './data/predictions.csv'
-submission_file = './data/submission.csv'
-
+movies_file = '../data/movies.csv'
+users_file = '../data/users.csv'
+ratings_file = '../data/ratings.csv'
+predictions_file = '../data/predictions.csv'
+submission_file = '../data/submission.csv'
 
 # Read the data using pandas
 movies_description = pd.read_csv(movies_file, delimiter=';', names=['movieID', 'year', 'movie'])
