@@ -57,8 +57,26 @@ def predict_collaborative_filtering(movies, users, ratings, predictions):
         .pivot(index='movieID', columns='userID', values='rating') \
         .fillna(0)
 
+    # Creating matrix for cosine similarity
+    r = ratings \
+        .groupby('movieID', as_index=False, sort=False) \
+        .mean() \
+        .rename(columns={'movieID': 'movieID', 'rating': 'mean_rating'})
+    r.drop('userID', axis=1, inplace=True)
 
-    pass
+    new_r = ratings.merge(r, how='left', on='movieID', sort=False)
+    new_r['centered_cosine'] = new_r['rating'] - new_r['mean_rating']
+
+    centered_cosine = new_r \
+        .pivot_table(index='movieID', columns='userID', values='centered_cosine') \
+        .fillna(0)
+
+    # Cosine similarity - find similar users for a certain user
+    # Will finish later like tomorrow
+#     print(new_r.values)
+
+
+pass
 
 
 #####
