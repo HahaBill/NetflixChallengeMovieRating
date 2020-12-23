@@ -31,15 +31,18 @@ submission_file = '../data/submission.csv'
 # submission_file = '/data/submission.csv'
 
 # Read the data using pandas
-movies_description = pd.read_csv(movies_file, delimiter=';', dtype={'movieID': 'int', 'year': 'int', 'movie': 'str'},
+movies_description = pd.read_csv(movies_file, delimiter=';',
+                                 dtype={'movieID': 'int', 'year': 'int', 'movie': 'str'},
                                  names=['movieID', 'year', 'movie'])
 users_description = pd.read_csv(users_file, delimiter=';',
                                 dtype={'userID': 'int', 'gender': 'str', 'age': 'int', 'profession': 'int'},
                                 names=['userID', 'gender', 'age', 'profession'])
 ratings_description = pd.read_csv(ratings_file, delimiter=';',
-                                  dtype={'userID': 'int', 'movieID': 'int', 'rating': 'int'},
+                                  dtype={'userID': 'int', 'movieID': 'int', 'rating': 'float64'},
                                   names=['userID', 'movieID', 'rating'])
-predictions_description = pd.read_csv(predictions_file, delimiter=';', names=['userID', 'movieID'], header=None)
+predictions_description = pd.read_csv(predictions_file, delimiter=';',
+                                      dtype={'userID': 'int', 'movieID': 'int'}, names=['userID', 'movieID'],
+                                      header=None)
 
 
 #####
@@ -48,16 +51,33 @@ predictions_description = pd.read_csv(predictions_file, delimiter=';', names=['u
 ##
 #####
 
-def predict_collaborative_filtering(movies, users, ratings, predictions):
-    """
-    Trying nearest-neighbor algorithm with Item-Item approach
-    """
-    # Creating utility matrix 'u' : User x Movie -> Rating
-    utility_matrix = ratings \
-        .pivot(index='movieID', columns='userID', values='rating') \
-        .fillna(0)
 
-    # Creating matrix for cosine similarity
+def predict_collaborative_filtering(movies, users, ratings, predictions):
+
+    # Processing predictions data in order to return it from this function
+    number_predictions = len(predictions)
+    prediction_creating = [[idx, random.uniform(0, 5)] for idx in range(1, number_predictions + 1)]
+    predictions_ratings = pd.DataFrame(prediction_creating, columns=['Id', 'Rating'])
+    predictions_ratings['movieID'] = predictions['movieID']
+    predictions_ratings['userID'] = predictions['userID']
+
+    # Adding missing movie_ids to the numpy arrays
+    range_missing = range(3696, 3707)
+
+    '''
+    Creating utility matrix 'u' : User x Movie -> Rating
+    '''
+    utility_matrix = ratings.pivot_table(index='movieID', columns='userID', values='rating',
+                                         fill_value=0)
+
+    original_rating = utility_matrix.values
+    for i, row in utility_matrix.iterrows():
+        if (i in range_missing):
+            original_rating = np.vstack([original_rating, row.values])
+
+    '''
+    Creating matrix for cosine similarity
+    '''
     r = ratings \
         .groupby('movieID', as_index=False, sort=False) \
         .mean() \
@@ -71,12 +91,52 @@ def predict_collaborative_filtering(movies, users, ratings, predictions):
         .pivot_table(index='movieID', columns='userID', values='centered_cosine') \
         .fillna(0)
 
-    # Cosine similarity - find similar users for a certain user
-    # Will finish later like tomorrow
-#     print(new_r.values)
+    all_movies_numpy = centered_cosine.values
+    for i, row in centered_cosine.iterrows():
+        if (i in range_missing):
+            all_movies_numpy = np.vstack([all_movies_numpy, row.values])
 
+    '''
+    Cosine similarity - find similar users for a certain user based on |N|,
+    also making a prediction with Pearson correlation
+    '''
+    for i, user_movie in predictions.iterrows():
+        print("CURRENT MOVIE : ", user_movie['movieID'])
+        current_movie = all_movies_numpy[user_movie['movieID'] - 1]
+        current_rating = original_rating[user_movie['movieID'] - 1][user_movie['userID'] - 1]
+        if (current_rating > 0):
+            predictions_ratings.at[i, 'Rating'] = current_rating
+            continue
 
-pass
+        current_denominator = np.sqrt(sum([np.square(x) for x in current_movie]))
+        top_N_similar_movies = []
+
+        # Computing similarities to current movie that we want to predict for particular user
+        for id_movie, movie in enumerate(all_movies_numpy):
+            numerator = [x * y for x, y in zip(current_movie, movie)]
+            other_denominator = np.sqrt(sum([np.square(x) for x in movie]))
+            costheta = sum(numerator) / (current_denominator * other_denominator)
+            top_N_similar_movies.append((id_movie + 1, costheta))
+
+        # Get N similar items
+        top_N_similar_movies.sort(key=lambda pair: pair[1], reverse=True)
+        similar_movies = top_N_similar_movies[0:5]
+        print("PAIR : ", "first element =", similar_movies[0][0], "second element =", similar_movies[0][1])
+
+        # Predicting the rating with Pearson correlation
+        pearson_denominator = sum([pair[1] for pair in similar_movies])
+        pearson_numerator = 0
+        for i in range(0, 5):
+            pearson_numerator += similar_movies[i][1] * original_rating[similar_movies[i][0] - 1][
+                user_movie['userID'] - 1]
+
+        print("Predicting...", pearson_numerator, " / ", pearson_denominator)
+        predictions_ratings.at[i, 'Rating'] = (pearson_numerator / pearson_denominator)
+        print("Predicted rating : ", predictions_ratings.at[i, 'Rating'])
+
+    return predictions_ratings
+
+    pass
 
 
 #####
@@ -103,7 +163,8 @@ def predict_final(movies, users, ratings, predictions):
     pass
 
 
-predict_collaborative_filtering(movies_description, users_description, ratings_description, predictions_description)
+rating_predictions = predict_collaborative_filtering(movies_description,
+                                                     users_description, ratings_description, predictions_description)
 
 
 #####
