@@ -187,7 +187,63 @@ def predict_collaborative_filtering(movies, users, ratings, predictions):
 def predict_latent_factors(movies, users, ratings, predictions):
     ## TO COMPLETE
 
-    pass
+    # Processing predictions data in order to return it from this function
+    number_predictions = len(predictions)
+    prediction_creating = [[idx, random.uniform(0, 5)] for idx in range(1, number_predictions + 1)]
+    predictions_ratings = pd.DataFrame(prediction_creating, columns=['Id', 'Rating'])
+    predictions_ratings['movieID'] = predictions['movieID']
+    predictions_ratings['userID'] = predictions['userID']
+
+    # Adding missing movie_ids to the numpy arrays
+    range_missing = range(3696, 3707)
+
+    '''
+    Creating utility matrix 'u' : User x Movie -> Rating
+    '''
+    utility_matrix = ratings.pivot_table(index='movieID', columns='userID', values='rating', fill_value=0)
+
+    original_rating = utility_matrix.values
+    for i, row in utility_matrix.iterrows():
+        if (i in range_missing):
+            original_rating = np.vstack([original_rating, row.values])
+
+    '''
+    Utility matrix with subtracted mean of the rating per movie
+    '''
+    r = ratings \
+        .groupby('movieID', as_index=False, sort=False) \
+        .mean() \
+        .rename(columns={'movieID': 'movieID', 'rating': 'mean_rating'})
+    r.drop('userID', axis=1, inplace=True)
+
+    new_r = ratings.merge(r, how='left', on='movieID', sort=False)
+    new_r['centered_cosine'] = new_r['rating'] - new_r['mean_rating']
+
+    centered_cosine = new_r \
+        .pivot_table(index='movieID', columns='userID', values='centered_cosine') \
+        .fillna(0)
+
+    all_movies_numpy = centered_cosine.values
+    for i, row in centered_cosine.iterrows():
+        if (i in range_missing):
+            all_movies_numpy = np.vstack([all_movies_numpy, row.values])
+
+    # Doing Matrix factorization Q * PT
+    U, S, VT = np.linalg.svd(original_rating, full_matrices=False)
+
+    Q = U
+    S_diagonal = np.diag(S)
+    P = S_diagonal.dot(VT)
+
+    # Predicting rating
+    for i, user_movie in predictions.iterrows():
+        qi = Q[user_movie['movieID'] - 1, :]
+        px = P[:, user_movie['userID'] - 1]
+
+        print(qi.dot(px))
+        predictions_ratings.at[i, 'Rating'] = qi.dot(px)
+
+    return predictions_ratings
 
 
 #####
