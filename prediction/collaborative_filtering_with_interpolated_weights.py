@@ -79,7 +79,7 @@ Interpolated weights + Gradient descent for Collaborative Filtering
 '''
 
 
-def interpolation_weights_optimization(movies, users, ratings, predictions, num_iterations, weight):
+def interpolation_weights_optimization(movies, users, ratings, predictions, num_iterations, weight, alpha):
     w = weight
     i = 0
     error_threshold = 0.01
@@ -88,6 +88,8 @@ def interpolation_weights_optimization(movies, users, ratings, predictions, num_
     while i < num_iterations and current_error < error_threshold:
         result_predicted_ratings = predict_collaborative_filtering(movies, users, ratings, predictions, w)
         error_sse = sum_of_squares(result_predicted_ratings)
+
+        # Gradient descent here
 
         current_error = error_sse
         i += 1
@@ -154,20 +156,16 @@ def predict_collaborative_filtering(movies, users, ratings, predictions, w):
         similar_movies = top_N_similar_movies[1:4]
 
         # Predicting the rating with interpolated weights
-        pearson_denominator = 0
-        for i, pair in enumerate(similar_movies):
-            pearson_denominator += similar_movies[i][1]
-
-        pearson_numerator = 0
+        interpolated_weights = 0
         for i in range(0, 3):
             calculate_similar_movie = original_rating[similar_movies[i][0] - 1, :]
             mean_similar_movie = calculate_similar_movie[np.nonzero(calculate_similar_movie)].mean()
 
             b_xj = mean_similar_movie - mean_all_ratings
-            pearson_numerator += similar_movies[i][1] * (original_rating[similar_movies[i][0] - 1]
-                                                         [user_movie['userID'] - 1] - b_xj)
+            interpolated_weights += w * (original_rating[similar_movies[i][0] - 1]
+                                         [user_movie['userID'] - 1] - b_xj)
 
-        final_prediction = mean_all_ratings + b_x + b_i + (pearson_numerator / pearson_denominator)
+        final_prediction = mean_all_ratings + b_x + b_i + (interpolated_weights)
 
         if final_prediction < 1:
             predictions.at[i, 'predicted_rating'] = 1
