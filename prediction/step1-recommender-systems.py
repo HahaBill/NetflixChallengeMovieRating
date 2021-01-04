@@ -233,13 +233,33 @@ def predict_latent_factors(movies, users, ratings, predictions):
     S_diagonal = np.diag(S)
     P = S_diagonal.dot(VT)
 
+    # Mean of the ratings
+    mean_all_ratings = ratings['rating'].mean()
+
     # Predicting rating
     for i, user_movie in predictions.iterrows():
         qi = Q[user_movie['movieID'] - 1, :]
         px = P[:, user_movie['userID'] - 1]
 
-        print(qi.dot(px))
-        predictions_ratings.at[i, 'Rating'] = qi.dot(px)
+        current_rating = original_rating[user_movie['movieID'] - 1][user_movie['userID'] - 1]
+        if current_rating > 0:
+            predictions_ratings.at[i, 'Rating'] = current_rating
+            continue
+
+        # Calculating global effects
+        user_calculate_mean = original_rating[:, user_movie['userID'] - 1]
+        movie_calculate_mean = original_rating[user_movie['movieID'] - 1, :]
+
+        mean_user_rating = user_calculate_mean[np.nonzero(user_calculate_mean)].mean()
+        mean_movie_rating = movie_calculate_mean[np.nonzero(movie_calculate_mean)].mean()
+
+        b_x = mean_user_rating - mean_all_ratings
+        b_i = mean_movie_rating - mean_all_ratings
+
+        qi = Q[user_movie['movieID'] - 1, :]
+        px = P[:, user_movie['userID'] - 1]
+
+        predictions_ratings.at[i, 'Rating'] = mean_all_ratings + b_x + b_i + qi.dot(px)
 
     return predictions_ratings
 

@@ -73,7 +73,6 @@ def sum_of_squares(ratings_with_prediction):
 
     return sse_error
 
-
 '''
 Interpolated weights + Gradient descent for Collaborative Filtering
 '''
@@ -181,9 +180,9 @@ def predict(movies, users, ratings, predictions):
     # number_predictions = len(predictions)
     # return [[idx, randint(1, 5)] for idx in range(1, number_predictions + 1)]
 
-    '''
+    """
     Splitting known ratings into training and test data
-    '''
+    """
     split_data = np.random.rand(len(ratings)) < 0.7
     train_data = ratings[split_data]
     test_data = ratings[~split_data]
