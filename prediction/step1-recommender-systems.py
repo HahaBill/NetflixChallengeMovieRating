@@ -78,10 +78,9 @@ def similarity_matrix_with_cosine(ratingMatrix):
 
     for i in range(number_items):
         print(i)
-        for j in range(i, number_items):
+        for j in range(0, number_items):
             movieID = j + 1
             similarity_matrix[i][j] = (movieID, cosine_similarity(ratingMatrix[:, i], ratingMatrix[:, j]))
-            similarity_matrix[j][i] = similarity_matrix[i][j]
 
     return similarity_matrix
 
@@ -99,11 +98,13 @@ def predict_collaborative_filtering(movies, users, ratings, predictions):
 
     # Creating utility matrix 'u' : User x Movie -> Rating
     utility_matrix = ratings.pivot_table(index='movieID', columns='userID', values='rating', fill_value=0)
+    print(ratings[ratings['movieID'] == 3706])
 
     original_rating = utility_matrix.values
     for i, row in utility_matrix.iterrows():
         if i in range_missing:
             original_rating = np.vstack([original_rating, row.values])
+
 
     # Creating matrix for cosine similarity
     r = ratings.groupby('movieID', as_index=False, sort=False).mean().rename(columns={'movieID': 'movieID', 'rating': 'mean_rating'})
@@ -128,11 +129,14 @@ def predict_collaborative_filtering(movies, users, ratings, predictions):
     # Similarity matrix
     similarity_matrix = similarity_matrix_with_cosine(all_movies_numpy)
 
+    print(similarity_matrix)
+
     # Mean of the ratings
     mean_all_ratings = ratings['rating'].mean()
 
     # Predicting ratings
     for i, user_movie in predictions.iterrows():
+        print("CURRENT PREDICTION : ", i)
         # current_rating = original_rating[user_movie['movieID'] - 1][user_movie['userID'] - 1]
         # if current_rating > 0:
         #     predictions_ratings.at[i, 'Rating'] = current_rating
@@ -153,6 +157,11 @@ def predict_collaborative_filtering(movies, users, ratings, predictions):
                                       reverse=True)
         similar_movies = top_N_similar_movies[1:4]
 
+
+
+
+
+
         # Predicting the rating with Pearson correlation
         pearson_denominator = 0
         for i, pair in enumerate(similar_movies):
@@ -163,18 +172,35 @@ def predict_collaborative_filtering(movies, users, ratings, predictions):
             calculate_similar_movie = original_rating[similar_movies[i][0] - 1, :]
             mean_similar_movie = calculate_similar_movie[np.nonzero(calculate_similar_movie)].mean()
 
+            # TRIED BOTH OPTIONS, STILL BAD
             b_xj = mean_similar_movie - mean_all_ratings
+            #b_xj = (mean_similar_movie - mean_all_ratings) + b_x + mean_all_ratings
+
             pearson_numerator += similar_movies[i][1] * (original_rating[similar_movies[i][0] - 1]
                                                          [user_movie['userID'] - 1] - b_xj)
 
         # Modelling global and local effects with weighted average
         final_prediction = mean_all_ratings + b_x + b_i + (pearson_numerator / pearson_denominator)
+
+        print(" ")
+        print("Predicted rating : ", final_prediction)
+        print("Pearson numerator : ", pearson_numerator)
+        print("Pearson_denominator :", pearson_denominator)
+        print(" ")
+
+
+
         if final_prediction < 1:
             predictions_ratings.at[i, 'Rating'] = 1
         elif final_prediction > 5:
             predictions_ratings.at[i, 'Rating'] = 5
         else:
             predictions_ratings.at[i, 'Rating'] = final_prediction
+
+        print("---")
+        print("Predicted rating : ", predictions_ratings.at[i, 'Rating'])
+        print("---")
+        print(" ")
 
     return predictions_ratings
 
@@ -205,20 +231,6 @@ def predict_latent_factors(movies, users, ratings, predictions):
     for i, row in utility_matrix.iterrows():
         if i in range_missing:
             original_rating = np.vstack([original_rating, row.values])
-
-    # Creating matrix for cosine similarity
-    r = ratings.groupby('movieID', as_index=False, sort=False).mean().rename(columns={'movieID': 'movieID', 'rating': 'mean_rating'})
-    r.drop('userID', axis=1, inplace=True)
-
-    new_r = ratings.merge(r, how='left', on='movieID', sort=False)
-    new_r['centered_cosine'] = new_r['rating'] - new_r['mean_rating']
-
-    centered_cosine = new_r.pivot_table(index='movieID', columns='userID', values='centered_cosine', fill_value=0)
-
-    all_movies_numpy = centered_cosine.values
-    for i, row in centered_cosine.iterrows():
-        if i in range_missing:
-            all_movies_numpy = np.vstack([all_movies_numpy, row.values])
 
     ##########################
     #                        #
@@ -288,10 +300,21 @@ def predict_final(movies, users, ratings, predictions):
 
     pass
 
+# OUTPUT RATING FOR COLLABORATIVE FILTERING
 
 rating_predictions = predict_collaborative_filtering(movies_description,
                                                      users_description, ratings_description, predictions_description)
-print(rating_predictions.head())
+rating_predictions.drop('userID', axis=1, inplace=True)
+rating_predictions.drop('movieID', axis=1, inplace=True)
+
+submission_read = pd.read_csv(submission_file)
+submission_read.columns = ['id', 'rating']
+
+submission_result = submission_read.merge(rating_predictions, how='left', left_on='id', right_on='Id')
+submission_result.drop('id', axis=1, inplace=True)
+submission_result.drop('rating', axis=1, inplace=True)
+submission_result.head()
+submission_result.to_csv('submission_result.csv', index=False)
 
 
 #####
