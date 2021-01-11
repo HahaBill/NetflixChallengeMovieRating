@@ -1,5 +1,6 @@
 .idea/**
 data/submission.csv
+*.csv
 
 # Created by .ignore support plugin (hsz.mobi)
 ### Python template
