@@ -62,20 +62,17 @@ def predict_latent_factors(movies, users, ratings, predictions):
     # Processing predictions data in order to return it from this function
     predictions_ratings = []
 
-    utility_matrix_none = ratings.pivot_table(index='movieID', columns='userID', values='rating',
-                                              fill_value=None)
+    utility_matrix_svd = ratings.pivot_table(index='movieID', columns='userID', values='rating',
+                                             fill_value=None)
 
-    utility_matrix_none.fillna(0, inplace=True)
-    # rating_numpy = utility_matrix_none.values
-
-    # missing_movies = [532, 637, 672, 821, 1079, 1569, 1642, 1645, 2395, 3153, 3226]
+    utility_matrix_svd.fillna(0, inplace=True)
     rating_numpy = []
     for i in range(1, 3707):
-        if not i in utility_matrix_none.index:
+        if not i in utility_matrix_svd.index:
             rating_numpy.append(np.zeros(6040))
             continue
         else:
-            rating_numpy.append(utility_matrix_none.loc[i].values)
+            rating_numpy.append(utility_matrix_svd.loc[i].values)
 
     ##########################
     #                        #
@@ -86,13 +83,39 @@ def predict_latent_factors(movies, users, ratings, predictions):
     # Doing Matrix factorization Q * PT
     U, S, VT = np.linalg.svd(rating_numpy, full_matrices=False)
 
-    print("U : ", len(U), " ", len(U[0]))
-    print("S : ", len(S), " ", len(S))
-    print("VT : ", len(VT), " ", len(VT[0]))
     Q = U
     S_diagonal = np.diag(S)
+
+    # Choosing latent factors
+
+    initial_energy = 0
+    initial_energy = sum([np.square(S_diagonal[i][i]) for i in range(len(S_diagonal))])
+
+    k = 2906
+
+    for i in range(0, k):
+        Q = np.delete(Q, len(Q[0]) - 1, 1)
+        VT = np.delete(VT, len(VT) - 1, 0)
+
+        S_diagonal = np.delete(S_diagonal, len(S_diagonal[0]) - 1, 1)
+        S_diagonal = np.delete(S_diagonal, len(S_diagonal) - 1, 0)
+
+    print("Number of "r" : ", len(S_diagonal))
+    current_energy = sum([np.square(S_diagonal[i][i]) for i in range(len(S_diagonal))])
+    percentage = current_energy / (initial_energy / 100)
+
+    # Creating P matrix
     P = S_diagonal.dot(VT)
-    print("P : ", len(P), " ", len(P[0]))
+
+    # Use this matrix for calculating user/movie biases
+    utility_matrix_none = ratings.pivot_table(index='userID', columns='movieID', values='rating',
+                                              fill_value=None)
+
+    # Add columns to the utility matrix for movies that are never rated
+    cols = utility_matrix_none.columns
+    for i in movies['movieID'].values:
+        if i not in cols:
+            utility_matrix_none[i] = np.nan
 
     # Mean of the ratings
     mean_all_ratings = ratings['rating'].mean()
@@ -111,14 +134,14 @@ def predict_latent_factors(movies, users, ratings, predictions):
 
         # Calculating global effects
 
-        user_rating = utility_matrix_none[user].values
-        movie_rating = utility_matrix_none.loc[movie].values
+        user_rating = utility_matrix_none.loc[user].values
+        movie_rating = utility_matrix_none[movie].values
 
         mean_user_rating = np.nanmean(user_rating)
-        #         mean_movie_rating = np.nanmean(movie_rating)
+        mean_movie_rating = np.nanmean(movie_rating)
 
-        #         b_x = mean_user_rating - mean_all_ratings
-        #         b_i = mean_movie_rating - mean_all_ratings
+        b_x = mean_user_rating - mean_all_ratings
+        b_i = mean_movie_rating - mean_all_ratings
 
         baseline = mean_all_ratings + b_i + b_x
 
@@ -127,12 +150,6 @@ def predict_latent_factors(movies, users, ratings, predictions):
         if np.isnan(pred) or pred < 1:
             pred = mean_all_ratings
 
-        print(" ")
-        print("Prediction : ", pred)
-        print("User rating : ", mean_user_rating)
-        #         print("Baseline : ", baseline)
-        print("qi * px : ", qi.dot(px.T))
-        print(" ")
         predictions_ratings.append((i + 1, pred))
 
     return predictions_ratings
