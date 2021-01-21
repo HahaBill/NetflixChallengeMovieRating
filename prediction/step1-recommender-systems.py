@@ -85,7 +85,7 @@ def similarity_matrix_with_cosine(ratingMatrix):
     return similarity_matrix
 
 
-def predict_collaborative_filtering(movies, users, ratings, predictions):
+def predict_collaborative_filtering_mov_mov(movies, users, ratings, predictions):
     # Processing predictions data in order to return it from this function
     number_predictions = len(predictions)
     prediction_creating = [[idx, random.uniform(0, 5)] for idx in range(1, number_predictions + 1)]
@@ -198,6 +198,91 @@ def predict_collaborative_filtering(movies, users, ratings, predictions):
     return predictions_ratings
 
 
+def predict_collaborative_filtering_us_us(movies, users, ratings, predictions, neighbours, min_periods = 27,
+                                         print_output=False):
+    predictions_ratings = []
+
+    utility_matrix_none = ratings.pivot_table(index='userID', columns='movieID', values='rating',
+                                              fill_value=None)
+
+    # Add columns to the utility matrix for movies that are never rated
+    cols = utility_matrix_none.columns
+    for i in movies['movieID'].values:
+        if i not in cols:
+            utility_matrix_none[i] = np.nan
+
+    utility_matrix_none = utility_matrix_none.transpose()
+    cols = utility_matrix_none.columns
+    for i in users['userID'].values:
+        if i not in cols:
+            utility_matrix_none[i] = np.nan
+
+    utility_matrix_none.to_csv('util.csv')
+
+    corr = utility_matrix_none.corr(min_periods=min_periods)
+
+
+    if print_output:
+        print("\n>>>UTILITY MATRIX\n")
+        print(utility_matrix_none)
+        print("\n>>>CORR MATRIX\n")
+        print(corr)
+        print("\n>>>TO PREDICT")
+        print(predictions)
+        print("\n\n>>>STARTING PREDICTION \n\n")
+
+    # For every prediction to make (item/item, or movie/movie in this case)
+    for i in range(len(predictions)):
+        if i % 100 == 0:
+            print(i, "/", len(predictions))
+        user = predictions.iloc[i][0]
+        movie = predictions.iloc[i][1]
+
+        c = corr[['userID', str(user)]]
+
+        # Sort the pearson correlation for all movies to the current movie to predict
+        sorted_pearson = c.sort_values(by=[str(user)], axis=0, ascending=False)
+
+        # Delete the movie itself, it should not be checked
+        sorted_pearson = sorted_pearson[sorted_pearson.userID != user]
+
+        # Get the movie id's of the sorted movies
+        sorted_users = sorted_pearson['userID'].values
+        sorted_corr = sorted_pearson[str(user)].values
+
+        # Add a certain amount of nearest neighbours, this amount is specified by the n_neighbours variable
+        relevant_ratings = []
+        for u in range(0, len(sorted_users)):
+            us = sorted_users[u]
+            rating = utility_matrix_none.at[movie, us]
+            if not np.isnan(rating):
+                relevant_ratings.append((rating, sorted_corr[u]))
+                if len(relevant_ratings) == neighbours:
+                    break
+
+        relevant_ratings = np.array(relevant_ratings)
+        pred = -1
+        if len(relevant_ratings) > 0:
+            total_weight = np.sum(relevant_ratings, axis=0)[-1]
+            for j in range(len(relevant_ratings)):
+                pred += relevant_ratings[j, 0] * relevant_ratings[j, 1] / total_weight
+
+        # If the rating can't be calculated, set it to 3 as average
+        if np.isnan(pred) or pred == -1:
+            pred = 3
+
+        if print_output:
+            print("\n>>>>>>>>>>>>STARTING PREDICTION NUMBER", i + 1, "\nUser:", user, "\nMovie:", movie, "\n")
+            print("\n>>SORTED PEARSON CORRELATION MATRIX\n")
+            print(sorted_pearson)
+            print("\n>>RELEVANT RATINGS AND THEIR WEIGHTS\n")
+            print(relevant_ratings)
+            print("\n>>FINAL PREDICTION: ", pred)
+        predictions_ratings.append((i + 1, pred))
+    return predictions_ratings
+
+
+
 #####
 ##
 ## LATENT FACTORS
@@ -301,9 +386,27 @@ def predict_final(movies, users, ratings, predictions):
     pass
 
 
-# OUTPUT RATING FOR COLLABORATIVE FILTERING
+# OUTPUT RATING FOR COLLABORATIVE FILTERING ITEM/ITEM
 
-# rating_predictions = predict_collaborative_filtering(movies_description,
+# rating_predictions = predict_collaborative_filtering_mov_mov(movies_description,
+#                                                      users_description, ratings_description, predictions_description)
+# rating_predictions.drop('userID', axis=1, inplace=True)
+# rating_predictions.drop('movieID', axis=1, inplace=True)
+#
+# submission_read = pd.read_csv(submission_file)
+# submission_read.columns = ['id', 'rating']
+#
+# submission_result = submission_read.merge(rating_predictions, how='left', left_on='id', right_on='Id')
+# submission_result.drop('id', axis=1, inplace=True)
+# submission_result.drop('rating', axis=1, inplace=True)
+# submission_result.head()
+# submission_result.to_csv('submission_result.csv', index=False)
+
+
+
+# OUTPUT RATING FOR COLLABORATIVE FILTERING USER/USER
+
+# rating_predictions = predict_collaborative_filtering_us_us(movies_description,
 #                                                      users_description, ratings_description, predictions_description)
 # rating_predictions.drop('userID', axis=1, inplace=True)
 # rating_predictions.drop('movieID', axis=1, inplace=True)
