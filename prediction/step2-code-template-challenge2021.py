@@ -61,9 +61,6 @@ def predict_collaborative_filtering(movies, users, ratings, predictions, neighbo
         if i not in cols:
             utility_matrix_none[i] = np.nan
 
-    # Store the utility matrix in .csv file
-    utility_matrix_none.to_csv('util.csv')
-    utility_matrix_none = pd.read_csv('util.csv')
     if corr is None:
         corr = utility_matrix_none.corr(min_periods=min_periods)
 
