@@ -91,7 +91,7 @@ def predict_latent_factors(movies, users, ratings, predictions):
     initial_energy = 0
     initial_energy = sum([np.square(S_diagonal[i][i]) for i in range(len(S_diagonal))])
 
-    k = 2906
+    k = 1806
 
     for i in range(0, k):
         Q = np.delete(Q, len(Q[0]) - 1, 1)
@@ -100,7 +100,9 @@ def predict_latent_factors(movies, users, ratings, predictions):
         S_diagonal = np.delete(S_diagonal, len(S_diagonal[0]) - 1, 1)
         S_diagonal = np.delete(S_diagonal, len(S_diagonal) - 1, 0)
 
-    print("Number of "r" : ", len(S_diagonal))
+    # Calculating energy and showing the current latent features, using 80% - 90% rule of thumb
+    r = len(S_diagonal)
+    print("Number of "r" : ", r)
     current_energy = sum([np.square(S_diagonal[i][i]) for i in range(len(S_diagonal))])
     percentage = current_energy / (initial_energy / 100)
 
@@ -155,6 +157,7 @@ def predict_latent_factors(movies, users, ratings, predictions):
     return predictions_ratings
 
 
+# Output our rating prediction
 preds_latent_factors = predict_latent_factors(movies_description, users_description, ratings_description,
                                               predictions_description)
 predictions_latent_factors = pd.DataFrame(preds_latent_factors, columns=['Id', 'Rating'])
