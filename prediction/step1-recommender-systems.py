@@ -15,19 +15,6 @@ To know more about the expectations, please refer to the guidelines.
 ##
 #####
 
-# -*- coding: utf-8 -*-
-"""
-### NOTES
-This file is an example of what your code should look like. It is written in Python 3.6.
-To know more about the expectations, please refer to the guidelines.
-"""
-
-#####
-##
-## DATA IMPORT
-##
-#####
-
 # Where data is located
 movies_file = '../data/movies.csv'
 users_file = '../data/users.csv'
@@ -79,9 +66,12 @@ def predict_collaborative_filtering_user_user(movies, users, ratings, prediction
         if i not in cols:
             utility_matrix_none[i] = np.nan
 
-    utility_matrix_none.to_csv('util.csv')
 
     corr = utility_matrix_none.corr(min_periods=min_periods)
+
+    # No idea why, but this fixes things
+    corr.to_csv('corr.csv')
+    corr = pd.read_csv('corr.csv')
 
     # For every prediction to make (user/user in this case)
     for i in range(len(predictions)):
