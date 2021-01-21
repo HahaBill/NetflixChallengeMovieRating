@@ -1,9 +1,5 @@
 import numpy as np
 import pandas as pd
-import os.path
-import random
-from random import randint
-from random import uniform
 
 print(np.version.version)
 # -*- coding: utf-8 -*-
@@ -64,142 +60,8 @@ predictions_description = pd.read_csv(predictions_file, delimiter=';', names=['u
 ##
 #####
 
-def cosine_similarity(a, b):
-    denominator = np.linalg.norm(a) * np.linalg.norm(b)
-    if denominator == 0:
-        return 0
-
-    return np.dot(a, b) / denominator
-
-
-def similarity_matrix_with_cosine(ratingMatrix):
-    number_items = np.shape(ratingMatrix)[0]
-    similarity_matrix = np.zeros((number_items, number_items), dtype=object)
-
-    for i in range(number_items):
-        print(i)
-        for j in range(0, number_items):
-            movieID = j + 1
-            similarity_matrix[i][j] = (movieID, cosine_similarity(ratingMatrix[:, i], ratingMatrix[:, j]))
-
-    return similarity_matrix
-
-
-def predict_collaborative_filtering_mov_mov(movies, users, ratings, predictions):
-    # Processing predictions data in order to return it from this function
-    number_predictions = len(predictions)
-    prediction_creating = [[idx, random.uniform(0, 5)] for idx in range(1, number_predictions + 1)]
-    predictions_ratings = pd.DataFrame(prediction_creating, columns=['Id', 'Rating'])
-    predictions_ratings['movieID'] = predictions['movieID']
-    predictions_ratings['userID'] = predictions['userID']
-
-    # Adding missing movie_ids to the numpy arrays
-    range_missing = range(3696, 3707)
-
-    # Creating utility matrix 'u' : User x Movie -> Rating
-    utility_matrix = ratings.pivot_table(index='movieID', columns='userID', values='rating', fill_value=0)
-    print(ratings[ratings['movieID'] == 3706])
-
-    original_rating = utility_matrix.values
-    for i, row in utility_matrix.iterrows():
-        if i in range_missing:
-            original_rating = np.vstack([original_rating, row.values])
-
-    # Creating matrix for cosine similarity
-    r = ratings.groupby('movieID', as_index=False, sort=False).mean().rename(
-        columns={'movieID': 'movieID', 'rating': 'mean_rating'})
-    r.drop('userID', axis=1, inplace=True)
-
-    new_r = ratings.merge(r, how='left', on='movieID', sort=False)
-    new_r['centered_cosine'] = new_r['rating'] - new_r['mean_rating']
-
-    centered_cosine = new_r.pivot_table(index='movieID', columns='userID', values='centered_cosine', fill_value=0)
-
-    all_movies_numpy = centered_cosine.values
-    for i, row in centered_cosine.iterrows():
-        if i in range_missing:
-            all_movies_numpy = np.vstack([all_movies_numpy, row.values])
-
-    ##########################
-    #                        #
-    # ALGORITHM STARTS HERE  #
-    #                        #
-    ##########################
-
-    # Similarity matrix
-    similarity_matrix = similarity_matrix_with_cosine(all_movies_numpy)
-
-    print(similarity_matrix)
-
-    # Mean of the ratings
-    mean_all_ratings = ratings['rating'].mean()
-
-    # Predicting ratings
-    for i, user_movie in predictions.iterrows():
-        print("CURRENT PREDICTION : ", i)
-        # current_rating = original_rating[user_movie['movieID'] - 1][user_movie['userID'] - 1]
-        # if current_rating > 0:
-        #     predictions_ratings.at[i, 'Rating'] = current_rating
-        #     continue
-
-        # Calculating global effects
-        user_calculate_mean = original_rating[:, user_movie['userID'] - 1]
-        movie_calculate_mean = original_rating[user_movie['movieID'] - 1, :]
-
-        mean_user_rating = user_calculate_mean[np.nonzero(user_calculate_mean)].mean()
-        mean_movie_rating = movie_calculate_mean[np.nonzero(movie_calculate_mean)].mean()
-
-        b_x = mean_user_rating - mean_all_ratings
-        b_i = mean_movie_rating - mean_all_ratings
-
-        # Get N similar items
-        top_N_similar_movies = sorted(similarity_matrix[user_movie['movieID'] - 1], key=lambda pair: pair[1],
-                                      reverse=True)
-        similar_movies = top_N_similar_movies[1:4]
-
-        # Predicting the rating with Pearson correlation
-        pearson_denominator = 0
-        for i, pair in enumerate(similar_movies):
-            pearson_denominator += similar_movies[i][1]
-
-        pearson_numerator = 0
-        for i in range(0, 3):
-            calculate_similar_movie = original_rating[similar_movies[i][0] - 1, :]
-            mean_similar_movie = calculate_similar_movie[np.nonzero(calculate_similar_movie)].mean()
-
-            # TRIED BOTH OPTIONS, STILL BAD
-            b_xj = mean_similar_movie - mean_all_ratings
-            # b_xj = (mean_similar_movie - mean_all_ratings) + b_x + mean_all_ratings
-
-            pearson_numerator += similar_movies[i][1] * (original_rating[similar_movies[i][0] - 1]
-                                                         [user_movie['userID'] - 1] - b_xj)
-
-        # Modelling global and local effects with weighted average
-        final_prediction = mean_all_ratings + b_x + b_i + (pearson_numerator / pearson_denominator)
-
-        print(" ")
-        print("Predicted rating : ", final_prediction)
-        print("Pearson numerator : ", pearson_numerator)
-        print("Pearson_denominator :", pearson_denominator)
-        print(" ")
-
-        if final_prediction < 1:
-            predictions_ratings.at[i, 'Rating'] = 1
-        elif final_prediction > 5:
-            predictions_ratings.at[i, 'Rating'] = 5
-        else:
-            predictions_ratings.at[i, 'Rating'] = final_prediction
-
-        print("---")
-        print("Predicted rating : ", predictions_ratings.at[i, 'Rating'])
-        print("---")
-        print(" ")
-
-    return predictions_ratings
-
-
-def predict_collaborative_filtering_us_us(movies, users, ratings, predictions, neighbours, min_periods = 27,
-                                         print_output=False):
+def predict_collaborative_filtering_user_user(movies, users, ratings, predictions, neighbours, min_periods=27,
+                                              print_output=False):
     predictions_ratings = []
 
     utility_matrix_none = ratings.pivot_table(index='userID', columns='movieID', values='rating',
@@ -221,17 +83,7 @@ def predict_collaborative_filtering_us_us(movies, users, ratings, predictions, n
 
     corr = utility_matrix_none.corr(min_periods=min_periods)
 
-
-    if print_output:
-        print("\n>>>UTILITY MATRIX\n")
-        print(utility_matrix_none)
-        print("\n>>>CORR MATRIX\n")
-        print(corr)
-        print("\n>>>TO PREDICT")
-        print(predictions)
-        print("\n\n>>>STARTING PREDICTION \n\n")
-
-    # For every prediction to make (item/item, or movie/movie in this case)
+    # For every prediction to make (user/user in this case)
     for i in range(len(predictions)):
         if i % 100 == 0:
             print(i, "/", len(predictions))
@@ -282,6 +134,20 @@ def predict_collaborative_filtering_us_us(movies, users, ratings, predictions, n
     return predictions_ratings
 
 
+# Predict the submission using Collaborative filtering and put it in csv file (submission_collaborative_filtering.csv)
+min_elements_non_zero = 27
+n_neighbours = 30
+
+preds_collaborative = predict_collaborative_filtering_user_user(movies_description,
+                                                                users_description, ratings_description,
+                                                                predictions_description,
+                                                                n_neighbours, min_elements_non_zero)
+
+predictions_cf = pd.DataFrame(preds_collaborative, columns=['Id', 'Rating'])
+predictions_cf.to_csv('submission_collaborative_filtering.csv', index=False)
+
+
+# ################################################################################################################################
 
 #####
 ##
@@ -295,17 +161,17 @@ def predict_latent_factors(movies, users, ratings, predictions):
     # Processing predictions data in order to return it from this function
     predictions_ratings = []
 
-    utility_matrix_none = ratings.pivot_table(index='userID', columns='movieID', values='rating',
-                                              fill_value=None)
+    utility_matrix_svd = ratings.pivot_table(index='movieID', columns='userID', values='rating',
+                                             fill_value=None)
 
-    # Add columns to the utility matrix for movies that are never rated
-    cols = utility_matrix_none.columns
-    for i in movies['movieID'].values:
-        if i not in cols:
-            utility_matrix_none[i] = np.nan
-
-    utility_matrix_none.fillna(0, inplace=True)
-    rating_numpy = utility_matrix_none.values
+    utility_matrix_svd.fillna(0, inplace=True)
+    rating_numpy = []
+    for i in range(1, 3707):
+        if not i in utility_matrix_svd.index:
+            rating_numpy.append(np.zeros(6040))
+            continue
+        else:
+            rating_numpy.append(utility_matrix_svd.loc[i].values)
 
     ##########################
     #                        #
@@ -316,162 +182,53 @@ def predict_latent_factors(movies, users, ratings, predictions):
     # Doing Matrix factorization Q * PT
     U, S, VT = np.linalg.svd(rating_numpy, full_matrices=False)
 
-    print("U : ", len(U), " ", len(U[0]))
-    print("S : ", len(S), " ", len(S))
-    print("VT : ", len(VT), " ", len(VT[0]))
     Q = U
     S_diagonal = np.diag(S)
+
+    # Creating P matrix
     P = S_diagonal.dot(VT)
-    print("P : ", len(P), " ", len(P[0]))
 
+    # Use this matrix for calculating user/movie biases
+    utility_matrix_none = ratings.pivot_table(index='userID', columns='movieID', values='rating',
+                                              fill_value=None)
 
+    # Add columns to the utility matrix for movies that are never rated
+    cols = utility_matrix_none.columns
+    for i in movies['movieID'].values:
+        if i not in cols:
+            utility_matrix_none[i] = np.nan
 
     # Mean of the ratings
     mean_all_ratings = ratings['rating'].mean()
+    utility_matrix_none.replace(0, np.nan, inplace=True)
 
     # Predicting rating
     for i, user_movie in predictions.iterrows():
+        if i % 100 == 0:
+            print(i, "/", len(predictions))
+
         user = predictions.iloc[i][0]
         movie = predictions.iloc[i][1]
 
-        qi = Q[user_movie['userID'] - 1, :]
-        px = P[:, user_movie['movieID'] - 1]
+        qi = Q[movie - 1, :]
+        px = P[:, user - 1]
 
-        # Calculating global effects
-
+        # Calculating user average rating
         user_rating = utility_matrix_none.loc[user].values
-        movie_rating = utility_matrix_none[movie].values
-
         mean_user_rating = np.nanmean(user_rating)
-        mean_movie_rating = np.nanmean(movie_rating)
 
-        b_x = mean_user_rating - mean_all_ratings
-        b_i = mean_movie_rating - mean_all_ratings
+        pred = mean_user_rating + np.dot(qi, px)
 
-        baseline = mean_all_ratings + b_i + b_x
+        if np.isnan(pred) or pred < 1:
+            pred = mean_all_ratings
 
-        pred = baseline + qi.dot(px)
-        print(" ")
-        print("Prediction : ", pred)
-        print("Baseline : ", baseline)
-        print("qi * px : ", qi.dot(px))
-        print(" ")
         predictions_ratings.append((i + 1, pred))
 
     return predictions_ratings
 
 
-#####
-##
-## FINAL PREDICTORS
-##
-#####
-
-def predict_final(movies, users, ratings, predictions):
-    ## TO COMPLETE
-    # Processing predictions data in order to return it from this function
-    number_predictions = len(predictions)
-    prediction_creating = [[idx, random.uniform(0, 5)] for idx in range(1, number_predictions + 1)]
-    predictions_ratings = pd.DataFrame(prediction_creating, columns=['Id', 'Rating'])
-    predictions_ratings['movieID'] = predictions['movieID']
-    predictions_ratings['userID'] = predictions['userID']
-
-    '''
-    Splitting known ratings into training and test data
-    '''
-    split_data = np.random.rand(len(ratings)) < 0.7
-    train_data = ratings[split_data]
-    test_data = ratings[~split_data]
-
-    pass
-
-
-# OUTPUT RATING FOR COLLABORATIVE FILTERING ITEM/ITEM
-
-# rating_predictions = predict_collaborative_filtering_mov_mov(movies_description,
-#                                                      users_description, ratings_description, predictions_description)
-# rating_predictions.drop('userID', axis=1, inplace=True)
-# rating_predictions.drop('movieID', axis=1, inplace=True)
-#
-# submission_read = pd.read_csv(submission_file)
-# submission_read.columns = ['id', 'rating']
-#
-# submission_result = submission_read.merge(rating_predictions, how='left', left_on='id', right_on='Id')
-# submission_result.drop('id', axis=1, inplace=True)
-# submission_result.drop('rating', axis=1, inplace=True)
-# submission_result.head()
-# submission_result.to_csv('submission_result.csv', index=False)
-
-
-
-# OUTPUT RATING FOR COLLABORATIVE FILTERING USER/USER
-
-# rating_predictions = predict_collaborative_filtering_us_us(movies_description,
-#                                                      users_description, ratings_description, predictions_description)
-# rating_predictions.drop('userID', axis=1, inplace=True)
-# rating_predictions.drop('movieID', axis=1, inplace=True)
-#
-# submission_read = pd.read_csv(submission_file)
-# submission_read.columns = ['id', 'rating']
-#
-# submission_result = submission_read.merge(rating_predictions, how='left', left_on='id', right_on='Id')
-# submission_result.drop('id', axis=1, inplace=True)
-# submission_result.drop('rating', axis=1, inplace=True)
-# submission_result.head()
-# submission_result.to_csv('submission_result.csv', index=False)
-
-predictions_latent_factors = predict_latent_factors(movies_description, users_description, ratings_description, predictions_description)
-predictions_latent_factors = pd.DataFrame(predictions_latent_factors, columns=['Id', 'Rating'])
-predictions_latent_factors.to_csv('submission_collaborative_filtering.csv', index=False)
-
-
-#####
-##
-## RANDOM PREDICTORS
-## //!!\\ TO CHANGE
-##
-#####
-
-# By default, predicted rate is a random classifier
-def predict_random(movies, users, ratings, predictions):
-    number_predictions = len(predictions)
-
-    return [[idx, randint(1, 5)] for idx in range(1, number_predictions + 1)]
-
-
-#####
-##
-## SAVE RESULTS
-##
-#####    
-
-
-# ## //!!\\ TO CHANGE by your prediction function
-
-'''
-Carefully read this : You can uncomment this but I am doing my own submission output since I cannot
-do "with open(submission_file)
-- written by Bill
-'''
-# submission_read = pd.read_csv(submission_file)
-# submission_read.columns = ['id', 'rating']
-#
-# predictions = predict_random(movies_description, users_description, ratings_description, predictions_description)
-# predictions_df = pd.DataFrame(predictions, columns = ['Id', 'Rating'])
-#
-# submission_result = submission_read.merge(predictions_df, how='left', left_on='id', right_on='Id')
-# submission_result.drop('id', axis=1, inplace=True)
-# submission_result.drop('rating', axis=1, inplace=True)
-#
-# submission_result.to_csv('submission.csv',  index=False)
-
-#
-# # Save predictions, should be in the form 'list of tuples' or 'list of lists'
-# with open(submission_file, 'w') as submission_writer:
-#     #Formates data
-#     predictions = [map(str, row) for row in predictions]
-#     predictions = [','.join(row) for row in predictions]
-#     predictions = 'Id,Rating\n'+'\n'.join(predictions)
-#
-#     #Writes it down
-#     submission_writer.write(predictions)
+# Predict the submission using Latent factors and put it in csv file (submission_latent_factors.csv)
+preds_latent_factors = predict_latent_factors(movies_description, users_description, ratings_description,
+                                              predictions_description)
+predictions_latent_factors = pd.DataFrame(preds_latent_factors, columns=['Id', 'Rating'])
+predictions_latent_factors.to_csv('submission_latent_factors.csv', index=False)

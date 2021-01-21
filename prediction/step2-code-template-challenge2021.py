@@ -45,16 +45,13 @@ predictions_description = pd.read_csv(predictions_file, delimiter=';', names=['u
 ## - Incorporated global biases
 ##
 #####
-
-# minimal elements to have a rating on for two movies to be considered a neighbour. Otherwise a movie with one rating
+# Minimal elements to have a rating on for two movies to be considered a neighbour. Otherwise a movie with one rating
 # and rest all zeroes is a good neighbour to all movies with that rating by that one user
 def predict_collaborative_filtering(movies, users, ratings, predictions, neighbours, min_periods, print_output=False,
                                     corr=None):
     predictions_ratings = []
 
-    #     Creating utility matrix 'u' : User x Movie -> Rating
-    #     utility_matrix = ratings.pivot_table(index='movieID', columns='userID', values='rating',
-    #                                          fill_value=0)
+    # Creating utility matrix
     utility_matrix_none = ratings.pivot_table(index='userID', columns='movieID', values='rating',
                                               fill_value=None)
 
@@ -64,12 +61,14 @@ def predict_collaborative_filtering(movies, users, ratings, predictions, neighbo
         if i not in cols:
             utility_matrix_none[i] = np.nan
 
-    #     utility_matrix_none.to_csv('util.csv')
-    #     utility_matrix_none = pd.read_csv('util.csv')
+    # Store the utility matrix in .csv file
+    utility_matrix_none.to_csv('util.csv')
+    utility_matrix_none = pd.read_csv('util.csv')
     if corr is None:
         corr = utility_matrix_none.corr(min_periods=min_periods)
 
-    # I don't know why, but somehow saving this in a csv and loading it back up again fixes some errors
+    # Creating similarity matrix with pearson correlation, in order to not compute it multiple times, we
+    # store the matrix in .csv file
     corr.to_csv(r'tempcorr.csv')
     corr = pd.read_csv(r'tempcorr.csv')
 
@@ -83,7 +82,7 @@ def predict_collaborative_filtering(movies, users, ratings, predictions, neighbo
         user = predictions.iloc[i][0]
         movie = predictions.iloc[i][1]
 
-        # Calculating baseline
+        # Calculating baseline estimates
         user_rating = utility_matrix_none.loc[user].values
         movie_rating = utility_matrix_none[movie].values
 
@@ -130,6 +129,7 @@ def predict_collaborative_filtering(movies, users, ratings, predictions, neighbo
             calculate_similar_movie = utility_matrix_none[current_movie].values
             mean_similar_movie = np.nanmean(calculate_similar_movie)
 
+            # Calculating baseline estimates for the current similar movie
             b_j = (mean_similar_movie - mean_all_ratings)
 
             b_xj = mean_all_ratings + b_j + b_x
@@ -171,34 +171,118 @@ predictions_cf = pd.DataFrame(preds_collaborative, columns=['Id', 'Rating'])
 predictions_cf.to_csv('submission_collaborative_filtering.csv', index=False)
 
 
+# ################################################################################################################################
+
+
 #####
 ##
 ## LATENT FACTORS WITH BASELINE ESTIMATE
 ## - Incorporated global biases
-##
+## - Reduced latent features
 ##
 #####
+def predict_latent_factors(movies, users, ratings, predictions):
+    ## TO COMPLETE
 
-def predict(movies, users, ratings, predictions):
-    number_predictions = len(predictions)
-    return [[idx, randint(1, 5)] for idx in range(1, number_predictions + 1)]
+    # Processing predictions data in order to return it from this function
+    predictions_ratings = []
+
+    # Creating Utility matrix
+    utility_matrix_svd = ratings.pivot_table(index='movieID', columns='userID', values='rating',
+                                             fill_value=None)
+
+    utility_matrix_svd.fillna(0, inplace=True)
+    rating_numpy = []
+    for i in range(1, 3707):
+        if not i in utility_matrix_svd.index:
+            rating_numpy.append(np.zeros(6040))
+            continue
+        else:
+            rating_numpy.append(utility_matrix_svd.loc[i].values)
+
+    ##########################
+    #                        #
+    # ALGORITHM STARTS HERE  #
+    #                        #
+    ##########################
+
+    # Doing Matrix factorization Q * PT
+    U, S, VT = np.linalg.svd(rating_numpy, full_matrices=False)
+
+    Q = U
+    S_diagonal = np.diag(S)
+
+    # Choosing latent features (optimal number of rank of the S matrix)
+    initial_energy = 0
+    initial_energy = sum([np.square(S_diagonal[i][i]) for i in range(len(S_diagonal))])
+
+    # Latent features = 3706 - k
+    k = 1806
+    for i in range(0, k):
+        Q = np.delete(Q, len(Q[0]) - 1, 1)
+        VT = np.delete(VT, len(VT) - 1, 0)
+
+        S_diagonal = np.delete(S_diagonal, len(S_diagonal[0]) - 1, 1)
+        S_diagonal = np.delete(S_diagonal, len(S_diagonal) - 1, 0)
+
+    # Calculating energy and showing the current latent features, using 80% - 90% rule of thumb
+    num_latent_features = len(S_diagonal)
+    current_energy = sum([np.square(S_diagonal[i][i]) for i in range(len(S_diagonal))])
+    percentage = current_energy / (initial_energy / 100)
+
+    # Creating P matrix
+    P = S_diagonal.dot(VT)
+
+    # Use this matrix for calculating user/movie biases
+    utility_matrix_none = ratings.pivot_table(index='userID', columns='movieID', values='rating',
+                                              fill_value=None)
+
+    # Add columns to the utility matrix for movies that are never rated
+    cols = utility_matrix_none.columns
+    for i in movies['movieID'].values:
+        if i not in cols:
+            utility_matrix_none[i] = np.nan
+
+    # Mean of the ratings
+    mean_all_ratings = ratings['rating'].mean()
+    utility_matrix_none.replace(0, np.nan, inplace=True)
+
+    # Predicting rating
+    for i, user_movie in predictions.iterrows():
+        if i % 100 == 0:
+            print(i, "/", len(predictions))
+
+        user = predictions.iloc[i][0]
+        movie = predictions.iloc[i][1]
+
+        qi = Q[movie - 1, :]
+        px = P[:, user - 1]
+
+        # Calculating global effects
+
+        user_rating = utility_matrix_none.loc[user].values
+        movie_rating = utility_matrix_none[movie].values
+
+        mean_user_rating = np.nanmean(user_rating)
+        mean_movie_rating = np.nanmean(movie_rating)
+
+        b_x = mean_user_rating - mean_all_ratings
+        b_i = mean_movie_rating - mean_all_ratings
+
+        baseline = mean_all_ratings + b_i + b_x
+
+        pred = baseline + np.dot(qi, px)
+
+        if np.isnan(pred) or pred < 1:
+            pred = mean_all_ratings
+
+        predictions_ratings.append((i + 1, pred))
+
+    return predictions_ratings
 
 
-#####
-##
-## SAVE RESULTS
-##
-#####    
-
-## //!!\\ TO CHANGE by your prediction function
-predictions = predict(movies_description, users_description, ratings_description, predictions_description)
-
-# Save predictions, should be in the form 'list of tuples' or 'list of lists'
-with open(submission_file, 'w') as submission_writer:
-    # Formates data
-    predictions = [map(str, row) for row in predictions]
-    predictions = [','.join(row) for row in predictions]
-    predictions = 'Id,Rating\n' + '\n'.join(predictions)
-
-    # Writes it dowmn
-    submission_writer.write(predictions)
+# Predict the submission using Latent factors and put it in csv file (submission_latent_factors.csv)
+preds_latent_factors = predict_latent_factors(movies_description, users_description, ratings_description,
+                                              predictions_description)
+predictions_latent_factors = pd.DataFrame(preds_latent_factors, columns=['Id', 'Rating'])
+predictions_latent_factors.to_csv('submission_latent_factors.csv', index=False)
